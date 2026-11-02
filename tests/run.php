@@ -41,7 +41,7 @@ namespace {
 namespace FluentBooking\App\Models {
     class Booking {
         public static $bookings = [];
-        public $id; public $event_id; public $status; public $location_details = [];
+        public $id; public $event_id; public $status; public $location_details = []; public $event_type = 'single';
         private $metas = []; public $saves = 0;
         public function __construct($id, $event_id, $status = 'scheduled', $location = []) {
             $this->id = $id; $this->event_id = $event_id; $this->status = $status; $this->location_details = $location;
@@ -94,6 +94,9 @@ namespace {
     check(is_wp_error($plugin->ensure_link($physical)), 'physical location protected');
     $remote = new \FluentBooking\App\Models\Booking(105, 12, 'scheduled', ['type' => 'online_meeting', 'online_platform_link' => 'https://zoom.us/other']);
     check(is_wp_error($plugin->ensure_link($remote)), 'existing link protected');
+    $group = new \FluentBooking\App\Models\Booking(107, 12);
+    $group->event_type = 'group';
+    check(is_wp_error($plugin->ensure_link($group)), 'group booking skipped rather than giving separate links to group guests');
     $failed = new \FluentBooking\App\Models\Booking(106, 12);
     $google->error = true;
     check(is_wp_error($plugin->ensure_link($failed)), 'API errors returned');
