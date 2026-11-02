@@ -1,49 +1,109 @@
 # FluentBooking Google Meet Links
 
-A custom WordPress plugin for generating **one unique Google Meet meeting space per FluentBooking appointment** while keeping **Apple/iCloud Calendar as the only source of availability and booked appointments**.
+A standalone **WordPress** plugin that creates **one unique Google Meet space per confirmed FluentBooking booking** using the [Google Meet REST API](https://developers.google.com/workspace/meet/api/reference/rest/v2/spaces/create).
 
-> **Status: scaffold only.** The plugin header is installable, but this initial commit does **not** connect to Google, generate Meet links, modify bookings, or send notifications.
+**Apple/iCloud Calendar remains the sole availability and appointment calendar.** This plugin does **not** connect to Google Calendar, create Google Calendar events, or change FluentBooking availability rules. It populates the standard FluentBooking booking `location_details` field so ordinary location smartcodes can include the Meet URL.
 
-## Intended behavior
+> Release: **1.0.0** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
 
-1. FluentBooking checks availability against the configured iCloud calendar.
-2. An appointment is confirmed through FluentBooking.
-3. This plugin creates exactly one Google Meet meeting space for that booking using the [Google Meet REST API `spaces.create`](https://developers.google.com/workspace/meet/api/reference/rest/v2/spaces/create).
-4. The meeting URL is stored with the FluentBooking booking and delivered to the host and invitee through supported notifications.
-5. Retries are idempotent; cancellation and rescheduling behavior are handled explicitly.
+## Features
 
-**No Google Calendar event is required.** This plugin will not use Google Calendar for availability or sync iCloud events into Google.
+- Generates a new Google Meet space (`POST /v2/spaces`) for each eligible **scheduled** booking.
+- Uses **only** the `meetings.space.created` OAuth scope; no Calendar API permissions.
+- One admin-configured Google account (for single-owner scheduling).
+- Native WordPress Settings → **FluentBooking Google Meet** page for OAuth credentials, Google connection, selected FluentBooking event IDs, and retry by booking ID.
+- Adds the URL to FluentBooking's standard `location_details` (`google_meet` / `online_platform_link`) **before** the normal scheduling lifecycle's outgoing notifications.
+- Stores the meeting URL and Meet resource name on the booking itself; repeat hooks/retries reuse the same URL and do not generate another room.
+- Skips pending, cancelled, rejected, unselected events, and appointments with a pre-existing non-empty/custom/phone/address location.
+- Sends WordPress site-admin email if a confirmed booking's Meet link cannot be generated; the booking is **not** cancelled.
+- Encrypts the OAuth refresh token and saved client secret using AES-256-GCM and WordPress salts; credentials can instead be set in `wp-config.php`.
+- No external PHP dependencies and no cron required for normal bookings.
 
-## Planned integration
+## Requirements
 
-- **WordPress / FluentBooking:** determine booking lifecycle hooks, the booking metadata API, and the timing of notification rendering against the installed FluentBooking version. See [FluentBooking developer hooks](https://developers.fluentbooking.com/hooks/).
-- **Google authorization:** OAuth 2.0 authorization code flow with minimum scope `https://www.googleapis.com/auth/meetings.space.created`; credentials and refresh tokens must be managed securely server-side, never committed to the repository.
-- **Meet creation:** `POST https://meet.googleapis.com/v2/spaces` using a valid OAuth access token. Store the returned `meetingUri` and Google `name` alongside the booking ID.
-- **Notifications:** confirm an approach that ensures the Meet link exists before customer-facing emails, or send a clearly branded follow-up only after successful creation. Do not assume an asynchronous webhook can alter an already-sent confirmation.
-- **Rescheduling and cancellation:** preserve the same Meet URL on reschedule by default; define whether cancellation should deactivate the meeting space, subject to Google API behavior.
-- **Reliability:** avoid duplicate spaces using a booking-specific lock and persisted record; log errors without disclosing Google tokens or attendee details.
+- WordPress 5.8+; PHP 7.4+ with **OpenSSL** and outbound HTTPS enabled.
+- Current FluentBooking (Core). If you check iCloud availability with FluentBooking, configure FluentBooking Pro's Apple Calendar integration **separately**; this plugin doesn't manage it.
+- Google Cloud project with **Google Meet API enabled** and an **OAuth 2.0 client for Web application**.
+- A Google account permitted to create Google Meet spaces.
+- A site using HTTPS for Google OAuth callbacks (except supported localhost development cases).
 
-## Security requirements
+## Setup
 
-- Restrict admin setup actions to authorized WordPress users; verify capabilities and nonces.
-- Store Google OAuth client secrets and tokens outside source control, encrypt at rest where feasible, and protect access to admin settings.
-- Sanitize input and escape output; avoid leaking tokens or private booking data to logs.
-- Use unique OAuth `state` and verify it on callback; request only the required scope.
+1. Install as the folder `fluentbooking-google-meet` inside `wp-content/plugins/` (or upload the release ZIP through Plugins → Add New → Upload Plugin); activate.
+2. In [Google Cloud Console](https://console.cloud.google.com/apis/library), select or create a project and **enable Google Meet API**.
+3. Configure the [OAuth consent screen](https://console.cloud.google.com/auth/overview), request the `https://www.googleapis.com/auth/meetings.space.created` scope, and add the account you will use as a test user if the app is in Testing mode. **Important:** an external OAuth app in *Testing* mode normally issues refresh tokens that expire after **7 days**. Publish/verify the app as appropriate to your use and Google's requirements.
+4. Create an **OAuth client ID → Web application** and add the precise **Authorized redirect URI** shown under WordPress → Settings → FluentBooking Google Meet. It has the form:
 
-## Local setup
+   `https://YOUR-SITE.example/wp-admin/admin-post.php?action=fbgm_oauth_callback`
 
-Place this directory in `wp-content/plugins/fluentbooking-google-meet/` and activate **FluentBooking Google Meet Links** after reviewing its code. At this stage activation does not add functionality.
+5. Save the OAuth client ID and client secret in that settings page, or use the `wp-config.php` constants below. Save **before** connecting.
+6. Click **Connect Google**, approve the `meetings.space.created` permission, and check the connection status.
+7. In FluentBooking, determine the numeric **event type IDs** that need Meet links. Set those event types' location to an **empty Custom location** (no existing URL, address, or other meeting platform). This plugin intentionally refuses to overwrite an existing meaningful location. Do **not** enable native Google Meet as a second FluentBooking integration.
+8. Enter those event IDs as comma-separated numbers, tick **Enable**, and save.
+9. In FluentBooking notifications (booking confirmation **and** reminders), include `{{booking.location_details_text}}` where the Google Meet link should appear. `{{booking.location_details_html}}` is also available in HTML-compatible contexts.
+10. Make a **staging/test booking**. Confirm it shows (a) Apple-based availability; (b) a unique Meet URL in FluentBooking; (c) a single booked appointment in iCloud; (d) the Meet link in host/guest messages and, ideally, in the synced Apple event location. Check a second booking produces a **different** URL.
 
-## Implementation checklist
+### Credentials in wp-config.php (recommended for production)
 
-- [ ] Google OAuth connection & token refresh
-- [ ] FluentBooking confirmed-booking hook and metadata handling
-- [ ] Per-booking Meet creation and idempotency
-- [ ] Booking notifications with the unique link
-- [ ] Error handling / manual retry
-- [ ] Reschedule and cancellation behavior
-- [ ] WordPress and FluentBooking compatibility tests
+Add before WordPress loads, **outside this public GitHub repository**:
+
+```php
+define('FBGM_GOOGLE_CLIENT_ID', 'YOUR_CLIENT_ID.apps.googleusercontent.com');
+define('FBGM_GOOGLE_CLIENT_SECRET', 'YOUR_GOOGLE_CLIENT_SECRET');
+```
+
+The admin form will make these fields read-only. **Never commit** `wp-config.php`, Google OAuth JSON downloads, tokens, `.env`, or API credentials.
+
+## Booking lifecycle
+
+- FluentBooking fires `fluent_booking/pre_after_booking_scheduled` early. Our handler creates the space synchronously, updates booking metadata, and stores the URL in the booking's normal `location_details` field.
+- A second `fluent_booking/after_booking_scheduled` handler is a safety net for alternate paths such as payments/approval. It is idempotent.
+- Repeated execution checks saved `fbgm_meet_url`; once present, it does not request another space.
+- Reschedules retain a URL when the same booking ID survives. A *new* booking ID (if FluentBooking uses one) receives its own unique URL. A handler on `after_booking_rescheduled` attempts to repair the new/updated record if passed a booking object.
+- Cancelling/rejecting a booking **does not delete** the Google Meet space: the Google Meet Spaces API does not provide a general delete-space operation. No Google Calendar event exists to cancel. Follow-up booking notifications are managed by FluentBooking.
+- **If the API fails**, the appointment remains booked and the site admin receives one notification per affected booking. Once Google is working again, use Settings → FluentBooking Google Meet → **Generate / Repair Link** for that booking ID. It does not automatically resend old confirmation emails; resend those from FluentBooking.
+- A crash in the narrow window after Google creates a space but *before* WordPress stores the response can lead to an unused orphaned space on retry. The API does not expose an idempotency key for `spaces.create`. Normal repeated booking hooks are deduplicated.
+
+## Security notes
+
+- OAuth `state` is random, single-use, bound to the logged-in administrator and expires in 10 minutes.
+- OAuth redirects/callbacks and settings changes require `manage_options`; modifying settings, retrying, connecting and disconnecting require WordPress nonces.
+- Tokens and client secrets stored in the WordPress database are encrypted using an AES-GCM key derived from WordPress authentication salts. **Rotate WP salts only if prepared to reconnect Google**; protect database backups and site administrators.
+- Google access tokens are short-lived and cached in WordPress transients.
+- Do **not** make the repository public with real credentials or committed database dumps. The source can be public safely without secrets.
+- Only the selected event IDs are processed. Other location types are never overwritten. The plugin is designed for a single Meet owner, not multiple distinct host Google accounts.
+
+## Diagnostics
+
+| Symptom | Check |
+| --- | --- |
+| Google connection fails | OAuth client must be **Web application**; redirect URI must match exactly; consent test user; Meet API enabled; Google account access |
+| Connection stops after a week | OAuth external Testing status may expire refresh tokens after seven days |
+| Booking has no Meet URL | Booking is `scheduled`; plugin enabled; event ID selected; blank existing location; token connected; PHP OpenSSL and HTTP requests work |
+| Location not in email | Add `{{booking.location_details_text}}` to the event's notification templates, then test sending order |
+| Apple calendar shows no Meet URL | Confirm its sync occurs after FluentBooking's early scheduling hook and that Apple calendar integration propagates location updates; actual behavior depends on your installed FluentBooking Pro version |
+| Manual repair succeeds but guest missed link | Resend the confirmation from FluentBooking; manual repair doesn't resend notices |
+| Repair fails | Inspect `fcal_booking_meta` for `fbgm_last_error` for the booking, and check Google/WordPress logs without publishing tokens |
+
+## Developer information
+
+- `fluentbooking-google-meet.php` — plugin entry point.
+- `includes/class-fbgm-storage.php` — settings, encryption, token persistence.
+- `includes/class-fbgm-google.php` — Google OAuth and Meet API requests.
+- `includes/class-fbgm-bookings.php` — booking lifecycle, idempotency, safe location handling.
+- `includes/class-fbgm-admin.php` — admin UI and callbacks.
+- `tests/run.php` — dependency-free PHP tests with fake WordPress/FluentBooking objects.
+
+Run locally: `php tests/run.php`; syntax check: `find . -name '*.php' -print0 | xargs -0 -n1 php -l`.
+
+### References
+
+- [Google Meet spaces.create](https://developers.google.com/workspace/meet/api/reference/rest/v2/spaces/create)
+- [Google OAuth 2.0 web application guide](https://developers.google.com/identity/protocols/oauth2/web-server)
+- [FluentBooking booking lifecycle hooks](https://developers.fluentbooking.com/hooks/actions/bookings-and-scheduling)
+- [FluentBooking Smartcodes](https://developers.fluentbooking.com/platform/smartcodes)
+- [FluentBooking Booking model and location handling](https://github.com/WPManageNinja/fluent-booking/blob/main/app/Models/Booking.php)
 
 ## License
 
-No license has been selected; all rights reserved until the repository owner chooses a license.
+GPL-2.0-or-later. See [LICENSE](LICENSE).
