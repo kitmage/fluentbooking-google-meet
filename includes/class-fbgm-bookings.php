@@ -44,6 +44,9 @@ class FBGM_Bookings
         if ($booking->status !== 'scheduled') {
             return new WP_Error('fbgm_booking_not_scheduled', 'Only confirmed scheduled bookings receive Meet links.');
         }
+        if (isset($booking->event_type) && $booking->event_type === 'group') {
+            return new WP_Error('fbgm_group_not_supported', 'Group event types are not supported; this integration is for one-to-one bookings.');
+        }
         $existing = (string) $booking->getMeta('fbgm_meet_url', '');
         if ($existing !== '' && FBGM_Google::valid_meet_url($existing)) {
             return $this->save_location($booking, $existing);
@@ -71,6 +74,9 @@ class FBGM_Bookings
             $fresh = \FluentBooking\App\Models\Booking::find(absint($booking->id));
             if (!$fresh || $fresh->status !== 'scheduled') {
                 return new WP_Error('fbgm_booking_unavailable', 'The booking no longer exists or is not scheduled.');
+            }
+            if (isset($fresh->event_type) && $fresh->event_type === 'group') {
+                return new WP_Error('fbgm_group_not_supported', 'Group event types are not supported.');
             }
             $stored = (string) $fresh->getMeta('fbgm_meet_url', '');
             if ($stored !== '' && FBGM_Google::valid_meet_url($stored)) {
