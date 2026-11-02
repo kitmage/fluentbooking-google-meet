@@ -10,3 +10,6 @@
 *.zip
 coverage/
 .phpunit.result.cache
+wp-config.php
+*client_secret*.json
+*credentials*.json
