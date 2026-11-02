@@ -14,7 +14,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 - Native WordPress Settings → **FluentBooking Google Meet** page for OAuth credentials, Google connection, selected FluentBooking event IDs, and retry by booking ID.
 - Adds the URL to FluentBooking's standard `location_details` (`google_meet` / `online_platform_link`) **before** the normal scheduling lifecycle's outgoing notifications.
 - Stores the meeting URL and Meet resource name on the booking itself; repeat hooks/retries reuse the same URL and do not generate another room.
-- Skips pending, cancelled, rejected, unselected events, and appointments with a pre-existing non-empty/custom/phone/address location.
+- Skips pending, cancelled, rejected, unselected or group events, and appointments with a pre-existing non-empty/custom/phone/address location.
 - Sends WordPress site-admin email if a confirmed booking's Meet link cannot be generated; the booking is **not** cancelled.
 - Encrypts the OAuth refresh token and saved client secret using AES-256-GCM and WordPress salts; credentials can instead be set in `wp-config.php`.
 - No external PHP dependencies and no cron required for normal bookings.
@@ -71,7 +71,7 @@ The admin form will make these fields read-only. **Never commit** `wp-config.php
 - Tokens and client secrets stored in the WordPress database are encrypted using an AES-GCM key derived from WordPress authentication salts. **Rotate WP salts only if prepared to reconnect Google**; protect database backups and site administrators.
 - Google access tokens are short-lived and cached in WordPress transients.
 - Do **not** make the repository public with real credentials or committed database dumps. The source can be public safely without secrets.
-- Only the selected event IDs are processed. Other location types are never overwritten. The plugin is designed for a single Meet owner, not multiple distinct host Google accounts.
+- Only selected **one-to-one** event IDs are processed. Group event types are deliberately skipped because multiple attendees on the same session must share a single Meet URL. Other location types are never overwritten. The plugin is designed for a single Meet owner, not multiple distinct host Google accounts.
 
 ## Diagnostics
 
