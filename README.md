@@ -4,7 +4,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 
 **Apple/iCloud Calendar remains the sole availability and appointment calendar.** This plugin does **not** connect to Google Calendar, create Google Calendar events, or change FluentBooking availability rules. It populates the standard FluentBooking booking `location_details` field so ordinary location smartcodes can include the Meet URL.
 
-> Release: **1.0.1** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
+> Release: **1.0.2** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
 
 ## Features
 
@@ -14,7 +14,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 - Native WordPress Settings → **FluentBooking Google Meet** page for OAuth credentials, Google connection, selected FluentBooking event IDs, and retry by booking ID.
 - Adds the URL to FluentBooking's standard `location_details` (`google_meet` / `online_platform_link`) **before** the normal scheduling lifecycle's outgoing notifications.
 - Stores the meeting URL and Meet resource name on the booking itself; repeat hooks/retries reuse the same URL and do not generate another room.
-- Skips pending, cancelled, rejected, unselected or group events, and appointments with a pre-existing non-empty/custom/phone/address location.
+- Skips pending, cancelled, rejected, unselected or group events, and protects non-empty custom/phone/address/other-conference locations. Overrides the Online Meeting default URL for selected events.
 - Sends WordPress site-admin email if a confirmed booking's Meet link cannot be generated; the booking is **not** cancelled.
 - Encrypts the OAuth refresh token and saved client secret using AES-256-GCM and WordPress salts; credentials can instead be set in `wp-config.php`.
 - No external PHP dependencies and no cron required for normal bookings.
@@ -38,7 +38,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 
 5. Save the OAuth client ID and client secret in that settings page, or use the `wp-config.php` constants below. Save **before** connecting.
 6. Click **Connect Google**, approve the `meetings.space.created` permission, and check the connection status.
-7. In FluentBooking, determine the numeric **event type IDs** that need Meet links. Set those event types' location to an **empty Custom location** (no existing URL, address, or other meeting platform). This plugin intentionally refuses to overwrite an existing meaningful location. Do **not** enable native Google Meet as a second FluentBooking integration.
+7. In FluentBooking, determine the numeric **event type IDs** that need Meet links. Set those event types' location to **Online Meeting** or to an **empty Custom location**. For selected event IDs, the plugin replaces an existing Online Meeting default URL with the generated Meet URL. It refuses to replace nonempty custom locations, physical addresses, or other conferencing links. Do **not** enable native Google Meet as a second FluentBooking integration.
 8. Enter those event IDs as comma-separated numbers, tick **Enable**, and save.
 9. In FluentBooking notifications (booking confirmation **and** reminders), include `{{booking.location_details_text}}` where the Google Meet link should appear. `{{booking.location_details_html}}` is also available in HTML-compatible contexts.
 10. Make a **staging/test booking**. Confirm it shows (a) Apple-based availability; (b) a unique Meet URL in FluentBooking; (c) a single booked appointment in iCloud; (d) the Meet link in host/guest messages and, ideally, in the synced Apple event location. Check a second booking produces a **different** URL.
@@ -111,3 +111,9 @@ GPL-2.0-or-later. See [LICENSE](LICENSE).
 
 - Fixed the **Connect Google** button being permanently disabled even when OAuth credentials are configured. WordPress emits a `disabled` HTML attribute when supplied a false value, so the plugin now omits the attribute entirely when credentials are present.
 - Saved Client ID, Client Secret, selected event IDs, and existing Google authorization state remain intact when replacing the plugin.
+
+## 1.0.2 bug fix
+
+- Fixed selected events retaining FluentBooking's configured Online Meeting URL instead of the unique generated Google Meet link. This URL is intentionally replaced **only** for selected event IDs.
+- Existing confirmed bookings can be updated using **Generate / Repair Link** with their booking ID in WordPress → Settings → FluentBooking Google Meet. Resend the booking confirmation afterward; the plugin does not automatically resend it.
+- Google authorization and Apple/iCloud availability behavior are unchanged.
