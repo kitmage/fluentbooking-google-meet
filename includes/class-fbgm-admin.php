@@ -133,7 +133,24 @@ class FBGM_Admin
         }
         $service = new FBGM_Bookings($this->google);
         $result = $service->ensure_link($booking);
-        $this->finish(is_wp_error($result) ? 'retry_failed' : 'retry_success');
+        $diagnostic_key = 'fbgm_retry_diagnostic_' . get_current_user_id();
+        if (is_wp_error($result)) {
+            // Some eligibility errors occur before fbgm_last_error metadata is set.
+            // Store a short-lived, administrator-specific diagnosis with no URLs or tokens.
+            $location = is_array($booking->location_details) ? $booking->location_details : [];
+            set_transient($diagnostic_key, [
+                'booking_id' => $id,
+                'code' => sanitize_key($result->get_error_code()),
+                'message' => sanitize_text_field($result->get_error_message()),
+                'event_id' => absint($booking->event_id ?? 0),
+                'status' => sanitize_key((string) ($booking->status ?? 'unknown')),
+                'location_type' => sanitize_key((string) ($location['type'] ?? 'none')),
+                'selected_event_ids' => implode(', ', FBGM_Storage::event_ids()),
+            ], 10 * MINUTE_IN_SECONDS);
+            $this->finish('retry_failed');
+        }
+        delete_transient($diagnostic_key);
+        $this->finish('retry_success');
     }
 
     public function page()
@@ -149,7 +166,7 @@ class FBGM_Admin
             'connected' => 'Google account connected. You can now enable selected events.',
             'disconnected' => 'Google account disconnected. Previously created Meet URLs remain on bookings.',
             'retry_success' => 'Booking has a Google Meet link.',
-            'retry_failed' => 'Could not create a link for that booking. Check its fbgm_last_error booking metadata and event/location selection.',
+            'retry_failed' => 'Could not create a Google Meet link. The specific error is shown below.',
             'booking_missing' => 'Booking not found or FluentBooking is inactive.',
             'credentials_missing' => 'Save your Google OAuth client ID and secret first.',
             'encryption_failed' => 'Secret could not be encrypted. Enable PHP OpenSSL or configure credentials in wp-config.php.',
@@ -170,6 +187,33 @@ class FBGM_Admin
             <?php if (!class_exists('FluentBooking\\App\\Models\\Booking')) : ?>
                 <div class="notice notice-error"><p>FluentBooking must be active for booking hooks to work.</p></div>
             <?php endif; ?>
+            <?php if ($notice === 'retry_failed') :
+                $diagnostic = get_transient('fbgm_retry_diagnostic_' . get_current_user_id());
+                if (is_array($diagnostic)) :
+                    $guidance = [
+                        'fbgm_event_not_enabled' => 'The booking event ID does not match the selected IDs. Add the booking event ID in section 2 and save.',
+                        'fbgm_booking_not_scheduled' => 'Only bookings with Scheduled status are eligible. Check whether the booking is Pending or Cancelled.',
+                        'fbgm_location_conflict' => 'The booking has a protected location. The plugin replaces Online Meeting locations or empty Custom locations only.',
+                        'fbgm_not_ready' => 'Confirm that automatic generation is enabled, Google is connected, and client credentials are saved.',
+                        'fbgm_google_token' => 'Google OAuth rejected the token request. Reconnect Google in section 3 and check OAuth consent testing restrictions.',
+                        'fbgm_meet_http' => 'Google Meet rejected the meeting creation request. Check that the Meet API is enabled and that the connected account has permission.',
+                        'fbgm_booking_locked' => 'Another request may be processing this booking. Wait two minutes and retry.',
+                        'fbgm_google_unavailable' => 'WordPress could not reach Google. Check outbound HTTPS connectivity on the server.',
+                    ];
+                    $code = (string) ($diagnostic['code'] ?? 'unknown');
+                    ?>
+                    <div class="notice notice-error inline" style="padding:12px 16px">
+                        <p><strong>Booking #<?php echo esc_html($diagnostic['booking_id']); ?> — diagnostic details</strong></p>
+                        <p><strong>Error code:</strong> <code><?php echo esc_html($code); ?></code></p>
+                        <p><strong>Cause:</strong> <?php echo esc_html($diagnostic['message']); ?></p>
+                        <p><strong>Booking event ID:</strong> <?php echo esc_html($diagnostic['event_id']); ?>;
+                            <strong>Selected event IDs:</strong> <?php echo esc_html($diagnostic['selected_event_ids'] ?: '(none)'); ?>;
+                            <strong>Status:</strong> <?php echo esc_html($diagnostic['status']); ?>;
+                            <strong>Location type:</strong> <?php echo esc_html($diagnostic['location_type']); ?></p>
+                        <p><strong>What to check:</strong> <?php echo esc_html($guidance[$code] ?? 'Use the error code and message to identify the failed step; the booking was not cancelled.'); ?></p>
+                    </div>
+                <?php endif;
+            endif; ?>
             <h2>1. Google Cloud setup</h2>
             <p>Enable <strong>Google Meet API</strong> in your Google Cloud project. Create an <strong>OAuth 2.0 Web application</strong> client and add this exact redirect URI:</p>
             <p><code><?php echo esc_html($this->google->redirect_uri()); ?></code></p>
