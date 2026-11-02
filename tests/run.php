@@ -93,7 +93,12 @@ namespace {
     $physical = new \FluentBooking\App\Models\Booking(104, 12, 'scheduled', ['type' => 'in_person_organizer', 'description' => '123 Main']);
     check(is_wp_error($plugin->ensure_link($physical)), 'physical location protected');
     $remote = new \FluentBooking\App\Models\Booking(105, 12, 'scheduled', ['type' => 'online_meeting', 'online_platform_link' => 'https://zoom.us/other']);
-    check(is_wp_error($plugin->ensure_link($remote)), 'existing link protected');
+    $remoteUrl = $plugin->ensure_link($remote);
+    check(FBGM_Google::valid_meet_url($remoteUrl), 'selected Online Meeting replaces configured default URL');
+    check($remote->location_details['type'] === 'google_meet' && $remote->location_details['online_platform_link'] === $remoteUrl, 'default URL replaced in booking location');
+    check($plugin->ensure_link($remote) === $remoteUrl, 'overridden link is idempotent');
+    $otherMeet = new \FluentBooking\App\Models\Booking(108, 12, 'scheduled', ['type' => 'google_meet', 'online_platform_link' => 'https://meet.google.com/qrs-tuvw-xyz']);
+    check(is_wp_error($plugin->ensure_link($otherMeet)), 'other Google Meet URL is protected');
     $group = new \FluentBooking\App\Models\Booking(107, 12);
     $group->event_type = 'group';
     check(is_wp_error($plugin->ensure_link($group)), 'group booking skipped rather than giving separate links to group guests');
