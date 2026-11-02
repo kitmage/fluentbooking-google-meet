@@ -4,7 +4,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 
 **Apple/iCloud Calendar remains the sole availability and appointment calendar.** This plugin does **not** connect to Google Calendar, create Google Calendar events, or change FluentBooking availability rules. It populates the standard FluentBooking booking `location_details` field so ordinary location smartcodes can include the Meet URL.
 
-> Release: **1.0.0** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
+> Release: **1.0.1** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
 
 ## Features
 
@@ -107,3 +107,7 @@ Run locally: `php tests/run.php`; syntax check: `find . -name '*.php' -print0 | 
 ## License
 
 GPL-2.0-or-later. See [LICENSE](LICENSE).
+## 1.0.1 bug fix
+
+- Fixed the **Connect Google** button being permanently disabled even when OAuth credentials are configured. WordPress emits a `disabled` HTML attribute when supplied a false value, so the plugin now omits the attribute entirely when credentials are present.
+- Saved Client ID, Client Secret, selected event IDs, and existing Google authorization state remain intact when replacing the plugin.
