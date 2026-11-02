@@ -4,7 +4,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 
 **Apple/iCloud Calendar remains the sole availability and appointment calendar.** This plugin does **not** connect to Google Calendar, create Google Calendar events, or change FluentBooking availability rules. It populates the standard FluentBooking booking `location_details` field so ordinary location smartcodes can include the Meet URL.
 
-> Release: **1.0.2** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
+> Release: **1.0.3** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
 
 ## Features
 
@@ -117,3 +117,9 @@ GPL-2.0-or-later. See [LICENSE](LICENSE).
 - Fixed selected events retaining FluentBooking's configured Online Meeting URL instead of the unique generated Google Meet link. This URL is intentionally replaced **only** for selected event IDs.
 - Existing confirmed bookings can be updated using **Generate / Repair Link** with their booking ID in WordPress → Settings → FluentBooking Google Meet. Resend the booking confirmation afterward; the plugin does not automatically resend it.
 - Google authorization and Apple/iCloud availability behavior are unchanged.
+
+## 1.0.3 diagnostics
+
+- **Generate / Repair Link** now shows a specific error code and safe explanation if it fails. The diagnostic includes the attempted booking's status, actual FluentBooking event ID, configured event IDs, and existing location type; no personal booking details, OAuth tokens, or credentials are displayed.
+- An administrator-specific diagnostic is kept temporarily for 10 minutes after the retry. Existing `fbgm_last_error` metadata is still available for API failures, but not all validation failures write metadata.
+- This change does not affect calendar availability, Google OAuth tokens, or booking URLs.
