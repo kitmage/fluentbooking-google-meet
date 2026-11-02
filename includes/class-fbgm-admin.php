@@ -190,7 +190,12 @@ class FBGM_Admin
             <p>Status: <strong><?php echo $connected ? 'Connected (refresh token stored)' : 'Not connected'; ?></strong>. All Meet rooms are created under the connected Google account.</p>
             <form action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post" style="display:inline-block;margin-right:12px">
                 <input type="hidden" name="action" value="fbgm_connect" /><?php wp_nonce_field('fbgm_connect'); ?>
-                <?php submit_button($connected ? 'Reconnect Google' : 'Connect Google', 'secondary', 'submit', false, ['disabled' => !FBGM_Storage::has_credentials()]); ?>
+                <?php
+                // WordPress outputs every supplied attribute, even when its value is false.
+                // Never include the boolean `disabled` attribute when credentials are present.
+                $connect_attributes = FBGM_Storage::has_credentials() ? [] : ['disabled' => 'disabled'];
+                submit_button($connected ? 'Reconnect Google' : 'Connect Google', 'secondary', 'submit', false, $connect_attributes);
+                ?>
             </form>
             <?php if ($connected) : ?>
                 <form action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post" style="display:inline-block">
