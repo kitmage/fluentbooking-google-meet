@@ -4,7 +4,7 @@ A standalone **WordPress** plugin that creates **one unique Google Meet space pe
 
 **Apple/iCloud Calendar remains the sole availability and appointment calendar.** This plugin does **not** connect to Google Calendar, create Google Calendar events, or change FluentBooking availability rules. It populates the standard FluentBooking booking `location_details` field so ordinary location smartcodes can include the Meet URL.
 
-> Release: **1.0.3** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
+> Release: **1.0.4** — implementation complete; **site-specific end-to-end verification is still required** with your exact FluentBooking / FluentBooking Pro version, Apple integration, Google Cloud credentials, and email templates. Do not use on live bookings without a staging test.
 
 ## Features
 
@@ -123,3 +123,9 @@ GPL-2.0-or-later. See [LICENSE](LICENSE).
 - **Generate / Repair Link** now shows a specific error code and safe explanation if it fails. The diagnostic includes the attempted booking's status, actual FluentBooking event ID, configured event IDs, and existing location type; no personal booking details, OAuth tokens, or credentials are displayed.
 - An administrator-specific diagnostic is kept temporarily for 10 minutes after the retry. Existing `fbgm_last_error` metadata is still available for API failures, but not all validation failures write metadata.
 - This change does not affect calendar availability, Google OAuth tokens, or booking URLs.
+
+## 1.0.4 Google API error diagnostics
+
+- When Google rejects a Meet-space creation request, the repair result now includes Google's **machine-readable reason code** (if supplied in the API response), such as `SERVICE_DISABLED` or `ACCESS_TOKEN_SCOPE_INSUFFICIENT`, plus a targeted explanation.
+- The raw Google error payload and access token are **not** displayed or logged. Some 403 responses supply only `PERMISSION_DENIED` without a more specific reason; in that case, double-check Google Meet API enablement in the OAuth client project and the connected account's privileges.
+- To inspect the result, install this version, go to **Settings → FluentBooking Google Meet**, and click **Generate / Repair Link** for the existing Booking ID. No new booking is needed; existing credentials and iCloud settings are unchanged.
