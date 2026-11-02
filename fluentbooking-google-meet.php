@@ -2,7 +2,7 @@
 /**
  * Plugin Name: FluentBooking Google Meet Links
  * Description: Create a unique Google Meet link for selected FluentBooking appointments while leaving Apple/iCloud Calendar authoritative.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Requires PHP: 7.4
  * Requires at least: 5.8
  * Text Domain: fluentbooking-google-meet
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('FBGM_VERSION', '1.0.3');
+define('FBGM_VERSION', '1.0.4');
 define('FBGM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
 require_once FBGM_PLUGIN_DIR . 'includes/class-fbgm-storage.php';
