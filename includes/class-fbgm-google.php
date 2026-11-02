@@ -74,7 +74,7 @@ class FBGM_Google
         $code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if ($code < 200 || $code >= 300) {
-            return new WP_Error('fbgm_meet_http', 'Google Meet API returned HTTP ' . $code . '. Check that the Meet API is enabled and your Google account is authorized.');
+            return self::meeting_http_error($code, $data);
         }
         if (!is_array($data) || empty($data['meetingUri']) || !self::valid_meet_url($data['meetingUri'])) {
             return new WP_Error('fbgm_meet_missing_url', 'Google Meet did not return a valid meeting URL.');
@@ -83,6 +83,55 @@ class FBGM_Google
             'url' => $data['meetingUri'],
             'space' => !empty($data['name']) && is_string($data['name']) ? sanitize_text_field($data['name']) : '',
         ];
+    }
+
+    /**
+     * Extract only machine-readable Google error reasons; never expose raw API payloads.
+     */
+    private static function meeting_http_error($code, $data)
+    {
+        $reason = '';
+        if (is_array($data) && isset($data['error']) && is_array($data['error'])) {
+            $error = $data['error'];
+            $candidates = [];
+            if (!empty($error['details']) && is_array($error['details'])) {
+                foreach ($error['details'] as $detail) {
+                    if (is_array($detail) && isset($detail['reason'])) {
+                        $candidates[] = $detail['reason'];
+                    }
+                }
+            }
+            if (!empty($error['errors']) && is_array($error['errors'])) {
+                foreach ($error['errors'] as $detail) {
+                    if (is_array($detail) && isset($detail['reason'])) {
+                        $candidates[] = $detail['reason'];
+                    }
+                }
+            }
+            $candidates[] = $error['reason'] ?? '';
+            $candidates[] = $error['status'] ?? '';
+            foreach ($candidates as $candidate) {
+                if (is_string($candidate) && preg_match('/^[A-Za-z][A-Za-z0-9_]{2,79}$/D', $candidate)) {
+                    $reason = strtoupper($candidate);
+                    break;
+                }
+            }
+        }
+
+        $hint = 'Verify Google Meet API is enabled in the OAuth client project and that the connected account has permission to create Meet spaces.';
+        if (in_array($reason, ['SERVICE_DISABLED', 'API_DISABLED', 'ACCESSNOTCONFIGURED', 'ACCESS_NOT_CONFIGURED'], true)) {
+            $hint = 'Enable the Google Meet API in the Google Cloud project containing your OAuth client ID. Then retry the booking.';
+        } else if (in_array($reason, ['ACCESS_TOKEN_SCOPE_INSUFFICIENT', 'INSUFFICIENTPERMISSIONS', 'INSUFFICIENT_AUTHENTICATION_SCOPES'], true)) {
+            $hint = 'Reconnect Google in plugin settings and approve the meetings.space.created permission.';
+        } else if (in_array($reason, ['ORG_RESTRICTION', 'ORG_RESTRICTED', 'DOMAIN_POLICY'], true)) {
+            $hint = 'A Google Workspace policy may block this app. Ask your Workspace administrator to authorize the required Meet API scope.';
+        }
+
+        $message = 'Google Meet API returned HTTP ' . absint($code);
+        if ($reason !== '') {
+            $message .= ' (Google reason: ' . $reason . ')';
+        }
+        return new WP_Error('fbgm_meet_http', $message . '. ' . $hint);
     }
 
     public static function valid_meet_url($url)
