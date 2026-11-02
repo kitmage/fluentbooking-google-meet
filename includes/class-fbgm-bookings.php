@@ -145,7 +145,13 @@ class FBGM_Bookings
             // Do not override a physical address or deliberately entered custom location.
             return empty($details['description']);
         }
-        if ($type === 'online_meeting' || $type === 'google_meet') {
+        if ($type === 'online_meeting') {
+            // FluentBooking copies the event's default meeting_link into every booking.
+            // Explicitly selected event IDs opt into overriding that default.
+            return true;
+        }
+        if ($type === 'google_meet') {
+            // Do not overwrite a link created by a different Meet integration.
             return $link === '' || ($own_url !== '' && hash_equals($own_url, $link));
         }
         return false;
